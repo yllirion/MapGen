@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8" />
+    <title>Генератор карт - Мехи Ямеона</title>
+	<style>
+body {
+	font-family: verdana;
+}
+svg {
+	cursor: crosshair;
+}
+canvas, svg {
+	position: absolute;
+}
+polygon {
+	fill: lime;
+	fill-opacity: 0;
+}
+polygon:hover {
+	fill-opacity:.25;
+	stroke: purple;
+	stroke-width: 5;
+}
+label > span {
+	display: inline-block;
+	width: 11em;
+}
+input[type="number"] {
+	width: 4em;
+}
+#switch-svg-layer + label {
+	font-size: 2em;
+	background-color: white;
+	cursor: pointer;
+	position: absolute;
+	z-index: 100;
+}
+#show-config + label {
+	font-size: 3em;
+	background-color: white;
+	cursor: pointer;
+	position: absolute;
+	top: 0;
+	right: 0.3em;
+}
+#show-config:checked ~ #map-config,
+#switch-svg-layer:checked ~ #map-container > #svg-layer,
+#switch-svg-layer:not(:checked) ~ #map-props-wrapper > #show-config + label,
+#switch-svg-layer:checked ~ #hex-edit-wrapper {
+	display: initial;
+}
+#show-config:not(checked) ~ #map-config,
+#switch-svg-layer:not(:checked) ~ #map-container > #svg-layer,
+#switch-svg-layer:checked ~ #map-props-wrapper > #show-config + label,
+#switch-svg-layer:not(:checked) ~ #hex-edit-wrapper {
+	display: none;
+}
+#switch-svg-layer:checked + label {
+	border: 2px green dashed;
+}
+#switch-svg-layer:not(:checked) + label {
+	border: 2px white dashed;
+	filter: grayscale(100%);
+}
+#map-props-wrapper {
+	background-color: rgba(255, 255, 255, 0.7);
+	padding: 2em;
+	position: absolute;
+	right: 0;
+	top: 0;
+}
+#map-props-wrapper:hover {
+	background-color: white;
+}
+#hex-edit-wrapper {
+	background-color: white;
+	padding: 2em;
+	position: absolute;
+	top: 2em;
+	left: 10em;
+}
+	</style>
+</head>
+<body onmouseup="MapGenerator.mouseUp()">
+<input type="checkbox" id="switch-svg-layer" style="display:none" />
+<label for="switch-svg-layer">✏️</label><br/>
+<aside id="map-container">
+	<canvas id="map-canvas"></canvas>
+	<svg id="svg-layer" xmlns="http://www.w3.org/2000/svg"></svg>
+</aside>
+<aside id="map-props-wrapper">
+	<input type="checkbox" id="show-config" style="display:none" />
+	<label for="show-config">&equiv;</label><br/>
+	<form id="map-config" onsubmit="return MapGenerator.submit()">
+		<label>
+			<span><b>Area prefab: </b></span>
+			<select name="areaPrefab" onchange="MapGenerator.selectAreaPrefab()">
+				<option value='{"flat":200,"wood":10,"woodOnBoulder":4,"boulder":16,"building":4,"cliff":12,"shallowWater":5,"deepWater":2,"lava":1}' selected>Lowland - Default</option>
+				<option value='{"flat":35,"wood":99,"woodOnBoulder":25,"boulder":10,"building":1,"cliff":4,"shallowWater":15,"deepWater":3,"lava":1}'>Forest</option>
+				<option value='{"flat":35,"wood":1,"woodOnBoulder":2,"boulder":10,"building":1,"cliff":5,"shallowWater":1,"deepWater":1,"lava":15}'>Near vulcan</option>
+				<option value='{"flat":50,"wood":4,"woodOnBoulder":1,"boulder":2,"building":13,"cliff":1,"shallowWater":2,"deepWater":0,"lava":0}'>Downtown</option>
+				<option value='{"flat":35,"wood":1,"woodOnBoulder":6,"boulder":35,"building":1,"cliff":6,"shallowWater":4,"deepWater":4,"lava":1}'>Mountains</option>
+				<option value='{"flat":30,"wood":0,"woodOnBoulder":0,"boulder":15,"building":0,"cliff":20,"shallowWater":1,"deepWater":1,"lava":1}'>Cave</option>
+			</select>
+		</label><br/>
+		<br/>
+		<strong>Map size:</strong><br/>
+		<label><span>Width: </span><input name="mapWidth" type="number" min="0" value="17" /></label> hex<br/>
+		<label><span>Height: </span><input name="mapHeight" type="number" min="0" value="17" /></label> hex<br/>
+		<br/>
+		<strong>Hex size:</strong><br/>
+		<label><span>Width: </span><input name="hexWidth" type="number" min="20" value="83" /></label> px<br/>
+		<label><span>Height: </span><input name="hexHeight" type="number" min="20" value="90" /></label> px<br/>
+		<br/>
+		<strong>Hex weights:</strong><br/>
+		<label><span>FLAT:</span>
+			<input class="hex-weight" name="flatWeight" type="number" min="0" value="200" data-type="FLAT" />
+		</label><br/>
+		<label><span>WOOD: </span>
+			<input class="hex-weight" name="woodWeight" type="number" min="0" value="10" data-type="WOOD" />
+		</label><br/>
+		<label><span>WOOD & BOULDER: </span>
+			<input class="hex-weight" name="woodOnBoulderWeight" type="number" min="0" value="4" data-type="WOOD_ON_BOULDER" />
+		</label><br/>
+		<label><span>BOULDER: </span>
+			<input class="hex-weight" name="boulderWeight" type="number" min="0" value="16" data-type="BOULDERS" />
+		</label><br/>
+		<label><span>BUILDING: </span>
+			<input class="hex-weight" name="buildingWeight" type="number" min="0" value="4" data-type="BUILDING" />
+		</label><br/>
+		<label><span>CLIFF: </span>
+			<input class="hex-weight" name="cliffWeight" type="number" min="0" value="12" data-type="CLIFF" />
+		</label><br/>
+		<label><span>SHALLOW WATER: </span>
+			<input class="hex-weight" name="shallowWaterWeight" type="number" min="0" value="5" data-type="SHALLOW_WATER" />
+		</label><br/>
+		<label><span>DEEP WATER: </span>
+			<input class="hex-weight" name="deepWaterWeight" type="number" min="0" value="2" data-type="DEEP_WATER" />
+		</label><br/>
+		<label><span>LAVA: </span>
+			<input class="hex-weight" name="lavaWeight" type="number" min="0" value="1" data-type="LAVA" />
+		</label><br/>
+		<br/>
+		<label>
+			<span><b>Blocking objects: </b></span><input name="blockingObjectsWeight" type="number" min="0" value="15" />
+		</label><br/>
+		<br/>
+		<label><strong>Conquest area: </strong><input type="checkbox" name="conquestSwitcher" checked /></label>
+		<label>Diameter: <input name="conquestAreaDiameter" type="number" min="0" value="3" />
+		</label><br/>
+		<br/>
+		<input type="submit" value="Generate" />
+		<input type="reset" value="Reset to default" />
+	</form>
+</aside>
+<aside id="hex-edit-wrapper" onmousedown="this.dataset.settled=0" data-settled="1">
+	<form id="hex-edit" onsubmit="return false">
+		<b>Hex types:</b><br/>
+		<label><input type="radio" name="editHexType" value="FLAT" checked />Standard flat hex</label><br/>
+		<label><input type="radio" name="editHexType" value="WOOD" />Wood 🌳</label><br/>
+		<label><input type="radio" name="editHexType" value="WOOD_ON_BOULDER" />Wood & boulder 🪨🌳</label><br/>
+		<label><input type="radio" name="editHexType" value="BOULDERS" />Boulder 🪨</label><br/>
+		<label><input type="radio" name="editHexType" value="BUILDING" />Building 🏢</label><br/>
+		<label><input type="radio" name="editHexType" value="CLIFF" />Cliff</label><br/>
+		<label><input type="radio" name="editHexType" value="SHALLOW_WATER" />Shallow water</label><br/>
+		<label><input type="radio" name="editHexType" value="DEEP_WATER" />Deep water</label><br/>
+		<label><input type="radio" name="editHexType" value="LAVA" />Lava</label><br/>
+		<br/>
+		<b>Blocking objects:</b><br/>
+		<label><input type="radio" name="blockingObject" value="-1" checked />No</label><br/>
+		<label><input type="radio" name="blockingObject" value="0" />🅛</label><br/>
+		<label><input type="radio" name="blockingObject" value="1" />🅜</label><br/>
+		<label><input type="radio" name="blockingObject" value="2" />🅗</label><br/>
+		<label><input type="radio" name="blockingObject" value="3" />🅐</label><br/>
+		<br/>
+		<b>Effects:</b><br/>
+		<label><input type="checkbox" name="BURNING" />Burning 🔥</label><br/>
+		<label><input type="checkbox" name="SMOKE_OR_STEAM" />Smoke/steam 💨</label><br/>
+	</form>
+</aside>
+<script>
+const MapGenerator = ((window) => {
+	let hexEditWrapper, configForm, hexEditForm, canvas, svgLayer, maxWeight, averageWeight;
+
+	const
+		DOC = window.document,
+		createColor = (red_p, green_p, blue_p) => {
+			return {
+				red : red_p,
+				green : green_p,
+				blue : blue_p,
+			}
+		},
+		ERROR_HEX_TYPE = {
+			name : "ERROR",
+			color : createColor(255,0,255)
+		},
+		WEIGHT = {NORMAL : 0, NEAR_FIRE : 1, ON_FIRE : 2, DIVISOR : 1000},
+		CONFIG = {
+			ENVIRONMENTAL_OBJECTS : {
+				weight : 20,
+				appearance : ["🅛","🅜","🅗","🅐"]
+			},
+			ENVIRONMENTAL_EFFECTS : {
+				BURNING : {
+					APPEARANCE : "🔥",
+					TILE : {
+						FLAT : [1, 1, 1],
+						BOULDERS : [1, 1, 2],
+						WOOD : [3, 250, 800],
+						WOOD_ON_BOULDER : [3, 250, 800],
+						BUILDING : [1, 5, 10],
+						CLIFF : [0, 0, 0],
+						SHALLOW_WATER : [0, 0, 0],
+						DEEP_WATER : [0, 0, 0],
+						LAVA : [0, 0, 0]
+					}
+				},
+				SMOKE_OR_STEAM : {
+					APPEARANCE : "💨",
+					TILE : {
+						FLAT : [0, 75, 600],
+						WOOD : [0, 75, 850],
+						WOOD_ON_BOULDER : [0, 75, 850],
+						BOULDERS : [0, 25, 600],
+						BUILDING : [0, 0, 350],
+						CLIFF : [0, 0, 0],
+						SHALLOW_WATER : [3, 15, 650],
+						DEEP_WATER : [3, 15, 550],
+						LAVA : [250, 250, 250]
+					}
+				}
+			},
+			MAP : {
+				BORDER_WIDTH : 35,
+				FONT : "Noto, Arial Unicode MS"
+			},
+			HEX : {
+				TYPES : {
+					FLAT : {
+						name : "FLAT",
+						color : createColor(220,215,175)
+					},
+					WOOD : {
+						name : "WOOD",
+						color : createColor(125,225,95),
+						text : "🌳"
+					},
+					BOULDERS : {
+						name : "BOULDERS",
+						color : createColor(190,190,190),
+						text : "🪨"
+					},
+					WOOD_ON_BOULDER : {
+						name : "WOOD_ON_BOULDER",
+						color : createColor(190,190,190),
+						text : "🪨🌳"
+					},
+					BUILDING : {
+						name : "BUILDING",
+						color : createColor(90,90,90),
+						text : "🏢"
+					},
+					CLIFF : {
+						name : "CLIFF",
+						color : createColor(0,0,0)
+					},
+					SHALLOW_WATER : {
+						name : "SHALLOW_WATER",
+						color : createColor(135,190,255),
+						text : "⋍"
+					},
+					DEEP_WATER : {
+						name : "DEEP_WATER",
+						color : createColor(50,50,180),
+						text : "≋"
+					},
+					LAVA : {
+						name : "LAVA",
+						color : createColor(235,45,45),
+						text: "⦚⦚⦚"
+					}
+				},
+				BORDER_WIDTH : 2
+			}
+		},
+		Map = {
+			getNeighbours : (map, hex) => {
+				const result = [];
+
+				if (!!map[hex.y]) {
+					// check neigbour left
+					if (hex.x > 0 && !!map[hex.y][hex.x - 1])
+						result.push(map[hex.y][hex.x - 1]);
+
+					// check neigbour right
+					if (!!map[hex.y][hex.x + 1])
+						result.push(map[hex.y][hex.x + 1]);
+				}
+
+				// check neighbours above
+				if (hex.y > 0 && !!map[hex.y - 1]) {
+					if (!!map[hex.y - 1][hex.x])
+						result.push(map[hex.y - 1][hex.x]);
+
+					if (hex.y % 2 == 0) {
+						if (!!map[hex.y - 1][hex.x - 1])
+							result.push(map[hex.y - 1][hex.x - 1]);
+					} else {
+						if (!!map[hex.y - 1][hex.x + 1])
+							result.push(map[hex.y - 1][hex.x + 1]);
+					}
+				}
+
+				// check neighbours below
+				if (!!map[hex.y + 1]) {
+					if (!!map[hex.y + 1][hex.x])
+						result.push(map[hex.y + 1][hex.x]);
+
+					if (hex.y % 2 == 0) {
+						if (!!map[hex.y + 1][hex.x - 1])
+							result.push(map[hex.y + 1][hex.x - 1]);
+					} else {
+						if (!!map[hex.y + 1][hex.x + 1])
+							result.push(map[hex.y + 1][hex.x + 1]);
+					}
+				}
+
+				return result;
+			},
+			calculateProbabilitiesOnWeightsOfHexTypes : (arrayOfHexTypes, sumOfWeights) => {
+				let probabilityIncrementor = 0;
+				for (const hexType of arrayOfHexTypes) {
+					const localProbability = hexType.weight / sumOfWeights;
+					hexType.leftProbability = probabilityIncrementor;
+					hexType.rightProbability = probabilityIncrementor + localProbability;
+					probabilityIncrementor = hexType.rightProbability;
+				}
+			},
+			addWeightToHexType : (hexTypes, typeName, weight) => {
+				if (!hexTypes[typeName]) {
+					hexTypes[typeName] = {
+						name : typeName,
+						weight: weight
+					};
+				} else {
+					hexTypes[typeName].weight += weight;
+				}
+			},
+			generate : _ => {
+				if (isNaN(CONFIG.MAP.WIDTH) || isNaN(CONFIG.MAP.HEIGHT) || CONFIG.MAP.WIDTH <= 0 || CONFIG.MAP.HEIGHT <= 0)
+					return;
+
+				// create all hexes
+				const hexes = [];
+				for (let x = 0; x < CONFIG.MAP.WIDTH; x++)
+					for (let y = 0; y < CONFIG.MAP.HEIGHT; y++)
+						hexes.push(Controller.createHex(x,y));
+
+				Controller.shuffleArray(hexes); // shuffle hexes
+
+				// generate landscape
+				const map = [];
+				for (const hex of hexes) {
+					const neighbours = Map.getNeighbours(map, hex);
+
+					// count local hex types
+					const localHexTypes = {};
+					for (const neighbourHex of neighbours) {
+						Map.addWeightToHexType(localHexTypes, neighbourHex.type.name, averageWeight);
+
+						// do more wood near water
+						if (neighbourHex.type.name == "SHALLOW_WATER" || neighbourHex.type.name == "DEEP_WATER") {
+							Map.addWeightToHexType(localHexTypes, "WOOD", averageWeight);
+							Map.addWeightToHexType(localHexTypes, "WOOD_ON_BOULDER", averageWeight);
+						}
+					}
+
+					// merge local weight with overall ones
+					for (const overallHexType of Object.values(CONFIG.HEX.TYPES))
+						Map.addWeightToHexType(localHexTypes, overallHexType.name, overallHexType.weight);
+
+					// calculate local hex type probabilities
+					const
+						localHexTypesArr = Object.values(localHexTypes),
+						arrayOfLocalWeights = localHexTypesArr.map(hexType => hexType.weight),
+						sumOfLocalWeights = arrayOfLocalWeights.reduce((a, b) => a + b, 0);
+
+					Map.calculateProbabilitiesOnWeightsOfHexTypes(localHexTypesArr, sumOfLocalWeights);
+
+					// throw probability
+					const probabilityThrow = Math.random();
+					let thrownHexType;
+					for (const localHexType of localHexTypesArr) {
+						if (probabilityThrow >= localHexType.leftProbability &&
+							probabilityThrow < localHexType.rightProbability)
+						{
+							thrownHexType = CONFIG.HEX.TYPES[localHexType.name];
+							break;
+						}
+					}
+
+					if (!thrownHexType)
+						Renderer.setTypeToHex(hex, ERROR_HEX_TYPE);
+					else
+						Renderer.setTypeToHex(hex, thrownHexType);
+
+					// apply enviromental objects
+					if (hex.type.name != "CLIFF" && hex.type.name != "SHALLOW_WATER" && hex.type.name != "DEEP_WATER" &&
+							Math.random() * 1000 <= CONFIG.ENVIRONMENTAL_OBJECTS.weight)
+					{
+						hex.environmentalObj = CONFIG.ENVIRONMENTAL_OBJECTS.appearance[
+								Math.floor(Math.random() * CONFIG.ENVIRONMENTAL_OBJECTS.appearance.length)];
+					}
+
+					// check conquest area
+					if (!!CONFIG.MAP.CONQUEST_AREA && !!CONFIG.MAP.CONQUEST_AREA.HEXS &&
+							!!CONFIG.MAP.CONQUEST_AREA.HEXS[hex.x] && !!CONFIG.MAP.CONQUEST_AREA.HEXS[hex.x][hex.y])
+					{
+						Renderer.setConquestAreaToHex(hex);
+					}
+
+					if (!map[hex.y])
+						map[hex.y] = [];
+
+					if (!map[hex.y][hex.x])
+						map[hex.y][hex.x] = hex;
+				}
+
+				// apply effects
+				for (const hex of hexes) {
+					const neighbours = Map.getNeighbours(map, hex);
+					let probabilityToBurn = CONFIG.ENVIRONMENTAL_EFFECTS.BURNING.TILE[hex.type.name][WEIGHT.NORMAL],
+						probabilityToSmoke = CONFIG.ENVIRONMENTAL_EFFECTS.SMOKE_OR_STEAM.TILE[hex.type.name][WEIGHT.NORMAL];
+
+					for (const neighbourHex of neighbours) {
+						if (neighbourHex.type.name == "LAVA") {
+							//console.log("Neighbour is lava: " + neighbourHex.x + "," + neighbourHex.y);
+							probabilityToBurn += CONFIG.ENVIRONMENTAL_EFFECTS.BURNING.TILE[hex.type.name][WEIGHT.ON_FIRE];
+							probabilityToSmoke += CONFIG.ENVIRONMENTAL_EFFECTS.SMOKE_OR_STEAM.TILE[hex.type.name][WEIGHT.ON_FIRE];
+						} else if (neighbourHex.effects.BURNING) {
+							//console.log("Neighbour is burning" + neighbourHex.x + "," + neighbourHex.y);
+							probabilityToBurn += CONFIG.ENVIRONMENTAL_EFFECTS.BURNING.TILE[hex.type.name][WEIGHT.NEAR_FIRE];
+							probabilityToSmoke += CONFIG.ENVIRONMENTAL_EFFECTS.SMOKE_OR_STEAM.TILE[hex.type.name][WEIGHT.NEAR_FIRE];
+						}
+					}
+
+					// burning
+					let thrownProbability = WEIGHT.DIVISOR * Math.random();
+					if (thrownProbability <= probabilityToBurn)
+						hex.effects.BURNING = true;
+
+					// smoke or steam
+					if (hex.effects.BURNING)
+						probabilityToSmoke += CONFIG.ENVIRONMENTAL_EFFECTS.SMOKE_OR_STEAM.TILE[hex.type.name][WEIGHT.ON_FIRE];
+
+					let p1 = thrownProbability;
+					thrownProbability = WEIGHT.DIVISOR * Math.random();
+					let p2 = thrownProbability;
+					if (thrownProbability <= probabilityToSmoke)
+						hex.effects.SMOKE_OR_STEAM = true;
+				}
+
+				return {
+					map : hexes,
+					width : CONFIG.MAP.WIDTH,
+					height : CONFIG.MAP.HEIGHT
+				};
+			}
+		},
+		Renderer = {
+			init : map => {
+				if (!canvas || !canvas.getContext) {
+					alert("Данный браузер не поддерживает работу с канвой.");
+					return false;
+				}
+
+				const
+					width = CONFIG.HEX.WIDTH * (map.width + 2) - CONFIG.HEX.SHIFT_LEFT,
+					height = CONFIG.HEX.HEIGHT * map.height - CONFIG.HEX.THIRD_OF_HEIGHT * (map.height - 5);
+
+				// clear svg layer
+				svgLayer.replaceChildren();
+				svgLayer.style.width = width + "px";
+				svgLayer.style.height = height + "px";
+
+				const context = canvas.getContext('2d');
+				context.clearRect(0, 0, canvas.width, canvas.height);
+
+				canvas.setAttribute("width", width);
+				canvas.setAttribute("height", height);
+				context.font = "bold " + CONFIG.MAP.FONT_SIZE + "px " + CONFIG.MAP.FONT;
+				context.textAlign = "center";
+				context.strokeStyle = "black";
+			},
+			validateColor : color => {
+				if (color.red < 0) color.red = 0;
+				if (color.green < 0) color.green = 0;
+				if (color.blue < 0) color.blue = 0;				
+				if (color.red > 255) color.red = 255;
+				if (color.green > 255) color.green = 255;
+				if (color.blue > 255) color.blue = 255;
+
+				return color;
+			},
+			doMoreBlue : color => {
+				return Renderer.validateColor({
+					red: color.red + 5,
+					green: color.green + 5,
+					blue: color.blue + 40
+				});
+			},
+			colorToRGB : c => {
+				return 'rgb(' + c.red + ',' + c.green + ',' + c.blue + ')';
+			},
+			colorToInvertedRGB : c => {
+				return 'rgb(' + (255 - c.red) + ',' + (255 - c.green) + ',' + (255 - c.blue) + ')';
+			},
+			colorToInvertedBicolor : c => {
+				return ((c.red + c.green + c.blue)/3 < 128) ? "white" : "black";
+			},
+			setTypeToHex : (hex, hexType) => {
+				hex.type = hexType;
+				Renderer.defineHexColors(hex);
+			},
+			setConquestAreaToHex : hex => {
+				const newColor = Renderer.doMoreBlue(hex.type.color);
+				hex.inConquestArea = true;
+				hex.rgb = Renderer.colorToRGB(newColor);
+				hex.invertedRgb = Renderer.colorToInvertedRGB(newColor);
+				hex.invertedBicolor = Renderer.colorToInvertedBicolor(newColor);
+			},
+			defineHexColors : hex => {
+				if (!hex.type) return;
+
+				hex.rgb = Renderer.colorToRGB(hex.type.color);
+				hex.invertedRgb = Renderer.colorToInvertedRGB(hex.type.color);
+				hex.invertedBicolor = Renderer.colorToInvertedBicolor(hex.type.color);
+			},
+			getCanvasFontSize : _ => {
+				return parseFloat(getComputedStyle(canvas).fontSize);
+			},
+			draw : map => {
+				for(const hex of map.map)
+					Renderer.drawHex(hex);
+			},
+			setShadow : ctx => {
+				ctx.shadowColor = "black";
+				ctx.shadowBlur = 8;
+				ctx.shadowOffsetX = 5;
+				ctx.shadowOffsetY = 5;
+			},
+			drawLine : (x0,y0,x1,y1,w,c) => {
+				const ct = canvas.getContext('2d');
+				
+				ct.strokeStyle = c;
+				ct.beginPath(); 
+				ct.moveTo(x0,y0); 
+				ct.lineTo(x1,y1);
+				ct.lineWidth = w;
+				ct.stroke();
+			},
+			drawBorder : (x0, y0, shift, borderColor, borderWidth) => {
+				const shiftQuarter = shift / 2;
+				Renderer.drawLine(
+						x0 + CONFIG.HEX.HALF_WIDTH, 	y0 + shift,
+						x0 + CONFIG.HEX.WIDTH - shift, 	y0 + CONFIG.HEX.THIRD_OF_HEIGHT + shiftQuarter,
+						borderWidth, borderColor);
+					Renderer.drawLine(
+						x0 + CONFIG.HEX.WIDTH - shift, 	y0 + CONFIG.HEX.THIRD_OF_HEIGHT + shiftQuarter, 
+						x0 + CONFIG.HEX.WIDTH - shift, 	y0 + CONFIG.HEX.THREE_QUARTER_OF_HEIGHT - shiftQuarter,
+						borderWidth, borderColor);
+					Renderer.drawLine(
+						x0 + CONFIG.HEX.WIDTH - shift, 	y0 + CONFIG.HEX.THREE_QUARTER_OF_HEIGHT - shiftQuarter, 
+						x0 + CONFIG.HEX.HALF_WIDTH, 	y0 + CONFIG.HEX.HEIGHT - shift, 
+						borderWidth, borderColor);
+					Renderer.drawLine(
+						x0 + CONFIG.HEX.HALF_WIDTH, 	y0 + CONFIG.HEX.HEIGHT - shift, 
+						x0 + shift, 					y0 + CONFIG.HEX.THREE_QUARTER_OF_HEIGHT - shiftQuarter, 
+						borderWidth, borderColor);
+					Renderer.drawLine(
+						x0 + shift, 					y0 + CONFIG.HEX.THREE_QUARTER_OF_HEIGHT - shiftQuarter, 
+						x0 + shift, 					y0 + CONFIG.HEX.THIRD_OF_HEIGHT + shiftQuarter, 
+						borderWidth, borderColor);
+					Renderer.drawLine(
+						x0 + shift, 					y0 + CONFIG.HEX.THIRD_OF_HEIGHT + shiftQuarter, 
+						x0 + CONFIG.HEX.HALF_WIDTH, 	y0 + shift, 
+						borderWidth, borderColor);
+			},
+			calcHexCoords : (x0, y0, hex) => {
+				hex.coords = [
+					{x: x0 + CONFIG.HEX.HALF_WIDTH, y: y0},
+					{x: x0 + CONFIG.HEX.WIDTH, 		y: y0 + CONFIG.HEX.THIRD_OF_HEIGHT},
+					{x: x0 + CONFIG.HEX.WIDTH, 		y: y0 + CONFIG.HEX.THREE_QUARTER_OF_HEIGHT},
+					{x: x0 + CONFIG.HEX.HALF_WIDTH, y: y0 + CONFIG.HEX.HEIGHT},
+					{x: x0, 						y: y0 + CONFIG.HEX.THREE_QUARTER_OF_HEIGHT},
+					{x: x0, 						y: y0 + CONFIG.HEX.THIRD_OF_HEIGHT}
+				];
+			},
+			drawHexSVG : (x0, y0, hexDO) => {
+				let points = "";
+				for (const coord of hexDO.coords)
+					points += coord.x + "," + coord.y + " ";
+
+				const polygon = DOC.createElementNS('http://www.w3.org/2000/svg', "polygon");
+				polygon.setAttribute("points", points);
+				polygon.dataset.x = hexDO.x;
+				polygon.dataset.y = hexDO.y;
+				if (hexDO.inConquestArea) 
+					polygon.dataset.conquestArea = 1;
+
+				svgLayer.appendChild(polygon);
+			},
+			drawHexOnCanvas : (x0, y0, hexDO) => {
+				const ct = canvas.getContext('2d');
+				ct.fillStyle = hexDO.rgb;
+				ct.beginPath();
+				ct.moveTo(hexDO.coords[0].x, hexDO.coords[0].y);
+				ct.lineTo(hexDO.coords[1].x, hexDO.coords[1].y);
+				ct.lineTo(hexDO.coords[2].x, hexDO.coords[2].y);
+				ct.lineTo(hexDO.coords[3].x, hexDO.coords[3].y);
+				ct.lineTo(hexDO.coords[4].x, hexDO.coords[4].y);
+				ct.lineTo(hexDO.coords[5].x, hexDO.coords[5].y);
+				ct.fill();
+				
+				Renderer.drawBorder(x0, y0, 0, Renderer.colorToRGB(CONFIG.HEX.TYPES.CLIFF.color), CONFIG.HEX.BORDER_WIDTH);
+				if (hexDO.inConquestArea) {
+					Renderer.drawBorder(x0, y0, 1, "#BB0066", CONFIG.HEX.BORDER_WIDTH);
+					Renderer.drawBorder(x0, y0, 2, "red", 1);
+					Renderer.drawBorder(x0, y0, 3, "orange", 1);
+					Renderer.drawBorder(x0, y0, 4, "#FF33FF", 1);
+					Renderer.drawBorder(x0, y0, 8, "orange", 1);
+				}
+
+				// output some text into hex
+				if (hexDO.type.text) {
+					ct.fillStyle = hexDO.invertedBicolor;
+					if (hexDO.type.name == "BOULDERS" || hexDO.type.name == "WOOD" || hexDO.type.name == "BUILDING" ||
+							hexDO.type.name == "WOOD_ON_BOULDER")
+					{
+						ct.save();
+						Renderer.setShadow(ct);
+						if (hexDO.type.name == "WOOD_ON_BOULDER") {
+							ct.letterSpacing = "-1em";
+							ct.fillText(hexDO.type.text,
+									x0 + CONFIG.HEX.HALF_WIDTH - Renderer.getCanvasFontSize() * 1.5,
+									y0 + CONFIG.HEX.SHIFT_TOP + CONFIG.MAP.FONT_SIZE/3);
+						} else {
+							ct.fillText(hexDO.type.text, x0 + CONFIG.HEX.HALF_WIDTH, y0 + CONFIG.HEX.SHIFT_TOP + CONFIG.MAP.FONT_SIZE/3);
+						}
+
+						ct.restore();
+					} else {
+						ct.fillText(hexDO.type.text, x0 + CONFIG.HEX.HALF_WIDTH, y0 + CONFIG.HEX.SHIFT_TOP + CONFIG.MAP.FONT_SIZE/3);
+					}
+				}
+
+				// output objects
+				if (hexDO.environmentalObj) {
+					ct.save();
+					ct.fillStyle = hexDO.invertedBicolor;
+					ct.font = "" + Math.ceil(CONFIG.MAP.FONT_SIZE * 0.66) + "px " + CONFIG.MAP.FONT;
+					ct.fillText(hexDO.environmentalObj,
+							x0 + CONFIG.HEX.HALF_WIDTH,
+							y0 + CONFIG.HEX.SHIFT_TOP - CONFIG.MAP.FONT_SIZE * 0.33);
+					ct.restore();
+				}
+
+				// output effects
+				let effect = "";
+				if (hexDO.effects.BURNING)
+					effect += CONFIG.ENVIRONMENTAL_EFFECTS.BURNING.APPEARANCE;
+
+				if (hexDO.effects.SMOKE_OR_STEAM)
+					effect += CONFIG.ENVIRONMENTAL_EFFECTS.SMOKE_OR_STEAM.APPEARANCE;
+
+				if (!!effect) {
+					ct.save();
+					ct.letterSpacing = "-0.8em";
+					Renderer.setShadow(ct);
+					ct.fillStyle = hexDO.invertedBicolor;
+					ct.font = "" + Math.ceil(CONFIG.MAP.FONT_SIZE * 0.66) + "px " + CONFIG.MAP.FONT;
+					ct.fillText(effect,
+							x0 + CONFIG.HEX.HALF_WIDTH - Renderer.getCanvasFontSize() * 0.8,
+							y0 + CONFIG.HEX.SHIFT_TOP + CONFIG.MAP.FONT_SIZE * 0.66);
+					ct.restore();
+				}
+			},
+			drawHex : (hexDO, ignoreSvg) => {
+				const hs = (hexDO.y % 2 == 0 ? 0 : CONFIG.HEX.SHIFT_LEFT),
+					x0 = CONFIG.MAP.BORDER_WIDTH + hexDO.x * CONFIG.HEX.WIDTH + hs,
+					y0 = hexDO.y * CONFIG.HEX.HEIGHT + CONFIG.HEX.SHIFT_TOP * (1 - hexDO.y * 0.5);
+
+				Renderer.calcHexCoords(x0, y0, hexDO);
+				Renderer.drawHexOnCanvas(x0, y0, hexDO);
+				if (!ignoreSvg)
+					Renderer.drawHexSVG(x0, y0, hexDO);
+			}
+		},
+		Controller = {
+			mouseUp : event => {
+				hexEditWrapper.dataset.settled = 1;
+			},
+			moveHexForm : event => {
+				event.preventDefault();
+				if (hexEditWrapper.dataset.settled == "1")
+					return;
+
+				const rect = hexEditWrapper.getBoundingClientRect();
+				hexEditWrapper.style.left = rect.x + event.movementX + 'px';
+				hexEditWrapper.style.top  = rect.y + event.movementY + 'px';
+			},
+			checkHexClick : event => {
+				if (!event || !event.target || !event.target.nodeName || event.target.nodeName != "polygon")
+					return;
+
+				const hexDO = Controller.createHex(event.target.dataset.x, event.target.dataset.y, CONFIG.HEX.TYPES[hexEditForm.editHexType.value]);
+				if (hexEditForm.blockingObject.value > -1)
+					hexDO.environmentalObj = CONFIG.ENVIRONMENTAL_OBJECTS.appearance[hexEditForm.blockingObject.value];
+
+				for (const effectName of Object.keys(CONFIG.ENVIRONMENTAL_EFFECTS)) {
+					if (hexEditForm[effectName] && hexEditForm[effectName].checked)
+						hexDO.effects[effectName] = true;
+				}
+
+				if (event.target.dataset.conquestArea == "1")
+					Renderer.setConquestAreaToHex(hexDO);
+
+				Renderer.drawHex(hexDO, true);
+			},
+			selectAreaPrefab : _ => {
+				const selectedPrefab = JSON.parse(configForm.areaPrefab.value);
+				for (const name of Object.keys(selectedPrefab))
+					configForm[name + "Weight"].value = selectedPrefab[name];
+
+				Controller.submit();
+			},
+			shuffleArray: (arr) => {
+				for (let i = 0; i < arr.length; i++) {
+					const j = Math.floor(arr.length * Math.random());
+					[arr[i], arr[j]] = [arr[j], arr[i]];
+				}
+			},
+			createHex : (x, y, hexType) => {
+				const result = {
+					x : x,
+					y : y,
+					effects : {}
+				};
+
+				Renderer.setTypeToHex(result, hexType);
+				return result;
+			},
+			applyConfig : _ => {			
+				CONFIG.HEX.WIDTH = parseInt(configForm.hexWidth.value);
+				CONFIG.HEX.HEIGHT = parseInt(configForm.hexHeight.value);
+				CONFIG.HEX.HALF_WIDTH = CONFIG.HEX.WIDTH / 2;
+				CONFIG.HEX.THIRD_OF_HEIGHT = CONFIG.HEX.HEIGHT * 0.25;
+				CONFIG.HEX.THREE_QUARTER_OF_HEIGHT = CONFIG.HEX.HEIGHT - CONFIG.HEX.THIRD_OF_HEIGHT;
+				CONFIG.HEX.SHIFT_LEFT = CONFIG.HEX.WIDTH / 2;
+				CONFIG.HEX.SHIFT_TOP = CONFIG.HEX.HEIGHT / 2;
+
+				CONFIG.MAP.WIDTH = parseInt(configForm.mapWidth.value);
+				CONFIG.MAP.HEIGHT = parseInt(configForm.mapHeight.value);
+				CONFIG.MAP.FONT_SIZE = (CONFIG.HEX.WIDTH + CONFIG.HEX.HEIGHT) / 3.5;
+
+				CONFIG.ENVIRONMENTAL_OBJECTS.weight = configForm.blockingObjectsWeight.value;
+
+				// config conquest area
+				if (configForm.conquestSwitcher.checked) {
+					const
+						CONQUEST_AREA_DIAMETER = parseInt(configForm.conquestAreaDiameter.value),
+						Y_MIDDLE = Math.floor(CONFIG.MAP.HEIGHT / 2),
+						X_START = Math.ceil((CONFIG.MAP.WIDTH - CONQUEST_AREA_DIAMETER) / 2);
+
+					CONFIG.MAP.CONQUEST_AREA = {HEXS : {}};
+					let x0 = x1 = x2 = X_START;
+					for (let w = CONQUEST_AREA_DIAMETER; w > (CONQUEST_AREA_DIAMETER - Math.ceil(CONQUEST_AREA_DIAMETER/2)); w--) {
+						const 
+							y1 = Y_MIDDLE + CONQUEST_AREA_DIAMETER - w,
+							y2 = Y_MIDDLE - CONQUEST_AREA_DIAMETER + w,
+							y3 = CONQUEST_AREA_DIAMETER - w,
+							y4 = CONFIG.MAP.HEIGHT + w - 1 - CONQUEST_AREA_DIAMETER;
+
+						for (let i = 0; i < w; i++) {
+							const _x0 = x0 + i;
+							if (!CONFIG.MAP.CONQUEST_AREA.HEXS[_x0])
+								CONFIG.MAP.CONQUEST_AREA.HEXS[_x0] = {};
+
+							CONFIG.MAP.CONQUEST_AREA.HEXS[_x0][y1] = true;
+							CONFIG.MAP.CONQUEST_AREA.HEXS[_x0][y2] = true;
+
+							const _x1 = x1 + i;
+							if (!CONFIG.MAP.CONQUEST_AREA.HEXS[_x1])
+								CONFIG.MAP.CONQUEST_AREA.HEXS[_x1] = {};
+
+							CONFIG.MAP.CONQUEST_AREA.HEXS[_x1][y3] = true;
+
+							const _x2 = x2 + i;
+							if (!CONFIG.MAP.CONQUEST_AREA.HEXS[_x2])
+								CONFIG.MAP.CONQUEST_AREA.HEXS[_x2] = {};
+
+							CONFIG.MAP.CONQUEST_AREA.HEXS[_x2][y4] = true;
+
+						}
+
+						x0 += y1 % 2;
+						x1 += y3 % 2;
+						x2 += y4 % 2;
+					}
+				} else {
+					delete CONFIG.MAP.CONQUEST_AREA;
+				}
+
+				for (const inputWeight of configForm.querySelectorAll(".hex-weight"))
+					CONFIG.HEX.TYPES[inputWeight.dataset.type].weight = parseInt(inputWeight.value);
+
+				const arrayOfOverallHexTypes = Object.values(CONFIG.HEX.TYPES);
+				maxWeight = Math.max(...arrayOfOverallHexTypes.map(hexType => hexType.weight));
+				averageWeight = maxWeight / arrayOfOverallHexTypes.length;
+			},
+			submit : _ => {
+				// set weights to hex types
+				Controller.applyConfig();
+
+				const map = Map.generate();
+				Renderer.init(map);
+				Renderer.draw(map);
+
+				return false;
+			},
+			init: _ => {
+				hexEditWrapper = DOC.getElementById("hex-edit-wrapper");
+				configForm = DOC.getElementById("map-config");
+				hexEditForm = DOC.getElementById("hex-edit");
+				canvas = DOC.getElementById("map-canvas");
+				svgLayer = DOC.getElementById("svg-layer");
+
+				svgLayer.addEventListener("click", Controller.checkHexClick);
+				hexEditWrapper.addEventListener("mousemove", Controller.moveHexForm);
+
+				Controller.submit();
+			}
+		};
+
+	return {
+		init : Controller.init,
+		submit : Controller.submit,
+		selectAreaPrefab : Controller.selectAreaPrefab,
+		mouseUp : Controller.mouseUp
+	};
+
+	/**
+	TODO:
+	 - add chained formation like river or wall etc.
+	 - add environment effect checkbox
+	*/
+})(window);
+
+MapGenerator.init();
+</script>
+</body>
+</html>
